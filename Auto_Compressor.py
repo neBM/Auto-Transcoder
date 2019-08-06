@@ -43,7 +43,7 @@ def initFFMPEG(inputFileDir):
     exportDir = os.path.abspath(relativePath)
 
 
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-y", exportDir if pathToTmp == False else tmpAbsDir]
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
         print("Move old: " + os.path.abspath(relMvOldPath))
@@ -67,21 +67,22 @@ def initFFMPEG(inputFileDir):
         if not os.path.exists(os.path.dirname(relMvOldPath)):
             os.makedirs(os.path.dirname(relMvOldPath))
         os.rename(inputFileDir, relMvOldPath)
-        addProcessed(inputFileDir, relativePath, relMvOldPath)
+        addProcessed(inputFileDir, relativePath, relMvOldPath, open(pathToProcessed, "a+"))
     else:
-        addProcessed(inputFileDir, relativePath)
+        addProcessed(inputFileDir, relativePath, open(pathToProcessed, "a+"))
 
     return True
 
-def addProcessed(relInputPath, relOutputPath, relMvOldPath):
+def addProcessed(relInputPath, relOutputPath, relMvOldPath, processedFile):
+    processedFile.seek(0, 2)
     if pathToMvOld != False and os.path.commonpath([pathToMvOld, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Move old files path is a child of the watch folder. Adding moved file to processed to prevent loops.")
         processed.append(relMvOldPath)
         processedFile.write("\t" + relMvOldPath)
-    addProcessed(relInputPath, relOutputPath)
+    addProcessed(relInputPath, relOutputPath, processedFile)
     return True
 
-def addProcessed(relInputPath, relOutputPath):
+def addProcessed(relInputPath, relOutputPath, processedFile):
     processedFile.seek(0, 2)
     if os.path.commonpath([pathToExport, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Export path is a child of the watch folder. Adding processed file to processed to prevent loops.")
@@ -90,45 +91,22 @@ def addProcessed(relInputPath, relOutputPath):
     processedFile.write("\t" + relInputPath)
     processed.append(relInputPath)
     print("Processed " + relInputPath)
+    processedFile.close()
     return True
 
 def iterate():
     media = getMediaList(re.compile(r"\bmp4\b$"), before)
     for x in media:
         if not initFFMPEG(x): exit()
-    time.sleep(1 * 60)
-    if loop:
+    if loop != False:
+        time.sleep(loop * 60)
         iterate()
-    exitEvent()
-
-def exitEvent():
-    processedFile.close()
     exit()
 
-processedFile = open("processed.tsv", "a+")
-processedFile.seek(0, 0)
-processed = processedFile.read().split("\t")
 
-options, args = getopt.getopt(sys.argv[1:], "hy", ["watch=", "export=", "mvold="])
-
-autoYes = False
-for o, v in options:
-    if o == "-h":
-        helpFile = open("help.txt", "r")
-        print(helpFile.read())
-        helpFile.close()
-        exit()
-    elif o == "-y":
-        autoYes = True
-    elif o == "--watch":
-        pathToWatch = v
-    elif o == "--export":
-        pathToExport = v
-    elif o == "--mvold":
-        pathToMvOld = v if v != "False" else False
 
 autoYes = True if os.environ["autoYes"] == "True" else False
-loop = True if "loop" in os.environ.keys() and os.environ["loop"] == "True" else False
+loop = os.environ["loop"] if "loop" in os.environ.keys() and os.environ["loop"] != "False" else False
 if "watch" in os.environ.keys():
     pathToWatch = os.environ["watch"]
 else:
@@ -136,6 +114,14 @@ else:
     exit()
 
 pathToExport = os.environ["export"]
+pathToProcessed = os.environ["processed"] if "processed" in os.environ.keys() else "/config/processed.tsv"
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
+
+if not os.path.exists(os.path.dirname(pathToProcessed)):
+    os.makedirs(os.path.dirname(pathToProcessed))
+processedFile = open(pathToProcessed, "a+")
+processedFile.seek(0, 0)
+processed = processedFile.read().split("\t")
+processedFile.close()
 iterate()
