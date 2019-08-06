@@ -106,7 +106,7 @@ def iterate():
 
 
 autoYes = True if os.environ["autoYes"] == "True" else False
-loop = os.environ["loop"] if "loop" in os.environ.keys() and os.environ["loop"] != "False" else False
+loop = int(os.environ["loop"]) if "loop" in os.environ.keys() and os.environ["loop"] != "False" else False
 if "watch" in os.environ.keys():
     pathToWatch = os.environ["watch"]
 else:
