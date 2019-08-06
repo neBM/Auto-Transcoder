@@ -1,0 +1,5 @@
+Arguments:
+	-y		Accept all queries
+	--watch=	Folder to watch for changes. Required
+	--export=	Folder to export finished transcodes. Required
+	--mvold=	Folder to move source when completed. Set to "False" to dissable (default).
