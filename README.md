@@ -12,11 +12,11 @@ tmp="<False//data/watch/folder/here>" | Intermedary directory to store transcodi
 
 
 ## Examples
-`docker run -v /mnt/compressor:/data -v /mnt/compressor_config:/config -e watch="/data/compressor/inbox" -e export="/data/compressor/outbox" -e mvold="False" -e autoYes="True" -e loop="1" -e tmp="/data/compressor/tmp" -e processed="/config/processed.tsv" -it autocompressor`
+`docker run -v /mnt/compressor:/data -v /mnt/compressor_config:/config -e watch="/data/compressor/inbox" -e export="/data/compressor/outbox" -e mvold="False" -e autoYes="True" -e loop="1" -e tmp="/data/compressor/tmp" -e processed="/config/processed.tsv" -it nebmartin/autocompressor`
 
 Take files from `/mnt/compressor/inbox`, compressing the files in `/mnt/compressor/tmp`, save them to `/mnt/compressor/outbox/` and updating `/config/processed.tsv` with the inbox files directory checking the inbox every 1 minute without asking confirmations from STDIN.
 
 ---
-`docker run -v /mnt/compressor:/data -v /mnt/compressor_config:/config -e watch="/data/compressor/inbox" -e export="/data/compressor/outbox" -e mvold="/data/compressor/old" -e autoYes="False" -e loop="False" -e tmp="False" -e processed="/config/processed.tsv" -it --rm autocompressor`
+`docker run -v /mnt/compressor:/data -v /mnt/compressor_config:/config -e watch="/data/compressor/inbox" -e export="/data/compressor/outbox" -e mvold="/data/compressor/old" -e autoYes="False" -e loop="False" -e tmp="False" -e processed="/config/processed.tsv" -it --rm nebmartin/autocompressor`
 
 Take files from `/mnt/compressor/inbox`, compressing the files in `/mnt/compressor/outbox/` and updating `/config/processed.tsv` with the inbox files directory checking the inbox once and then closing and deleting the container while asking for confirmations from STDIN. Once completed compression, the inbox files get moved to `/data/compressor/old`.
