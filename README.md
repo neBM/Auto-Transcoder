@@ -1,4 +1,4 @@
-# Auto-Compressor
+# [Auto-Compressor](https://hub.docker.com/r/nebmartin/autocompressor)
 # Env
 - autoYes="<True/False>"
     If set to "True" then the program wont require user confirmation (Default: False).
