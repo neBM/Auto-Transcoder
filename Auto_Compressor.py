@@ -1,4 +1,4 @@
-import os, time, re, subprocess, getopt, sys
+import os, time, re, subprocess, getopt, sys, watchdog
 from copy import deepcopy
 
 
@@ -67,32 +67,35 @@ def initFFMPEG(inputFileDir):
         if not os.path.exists(os.path.dirname(relMvOldPath)):
             os.makedirs(os.path.dirname(relMvOldPath))
         os.rename(inputFileDir, relMvOldPath)
-        addProcessed(inputFileDir, relativePath, relMvOldPath, open(pathToProcessed, "a+"))
+        addProcessed(inputFileDir, relativePath, relMvOldPath)
     else:
-        addProcessed(inputFileDir, relativePath, open(pathToProcessed, "a+"))
+        addProcessed(inputFileDir, relativePath)
 
     return True
 
-def addProcessed(relInputPath, relOutputPath, relMvOldPath, processedFile):
-    processedFile.seek(0, 2)
+def addProcessed(relInputPath, relOutputPath, relMvOldPath):
     if pathToMvOld != False and os.path.commonpath([pathToMvOld, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Move old files path is a child of the watch folder. Adding moved file to processed to prevent loops.")
-        processed.append(relMvOldPath)
-        processedFile.write("\t" + relMvOldPath)
-    addProcessed(relInputPath, relOutputPath, processedFile)
+        addToProcessedFile(relMvOldPath)
+    addProcessed(relInputPath, relOutputPath)
     return True
 
-def addProcessed(relInputPath, relOutputPath, processedFile):
-    processedFile.seek(0, 2)
+def addProcessed(relInputPath, relOutputPath):
     if os.path.commonpath([pathToExport, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Export path is a child of the watch folder. Adding processed file to processed to prevent loops.")
-        processed.append(relOutputPath)
-        processedFile.write("\t" + relOutputPath)
-    processedFile.write("\t" + relInputPath)
-    processed.append(relInputPath)
+        addToProcessedFile(relOutputPath)
+    addToProcessedFile(relInputPath)
     print("Processed " + relInputPath)
     processedFile.close()
     return True
+
+def addToProcessedFile(fileDir):
+    if os.environ["processed"] != "False":
+        processedFile = open(pathToProcessed, "a+")
+        processedFile.seek(0, 2)
+        processedFile.write("\t" + fileDir)
+    processed.append(processedFile)
+
 
 def iterate():
     while True:
@@ -112,14 +115,21 @@ else:
     exit()
 
 pathToExport = os.environ["export"]
-pathToProcessed = os.environ["processed"] if "processed" in os.environ.keys() else "/config/processed.tsv"
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
 
-if not os.path.exists(os.path.dirname(pathToProcessed)):
-    os.makedirs(os.path.dirname(pathToProcessed))
-processedFile = open(pathToProcessed, "a+")
-processedFile.seek(0, 0)
-processed = processedFile.read().split("\t")
-processedFile.close()
+
+print(os.environ["processed"])
+if "processed" in os.environ.keys() and os.environ["processed"] != "False":
+    pathToProcessed = os.environ["processed"] if "processed" in os.environ.keys() else "/config/processed.tsv"
+    if not os.path.exists(os.path.dirname(pathToProcessed)):
+        os.makedirs(os.path.dirname(pathToProcessed))
+    processedFile = open(pathToProcessed, "a+")
+    processedFile.seek(0, 0)
+    processed = processedFile.read().split("\t")
+    processedFile.close()
+else:
+    os.environ["processed"] = "False"
+    processed = []
+
 iterate()
