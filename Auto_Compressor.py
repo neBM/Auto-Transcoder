@@ -95,18 +95,16 @@ def addProcessed(relInputPath, relOutputPath, processedFile):
     return True
 
 def iterate():
-    media = getMediaList(re.compile(r"\bmp4\b$"), before)
-    for x in media:
-        if not initFFMPEG(x): exit()
-    if loop != False:
+    while True:
+        media = getMediaList(re.compile(r"\bmp4\b$"), before)
+        for x in media:
+            if not initFFMPEG(x): exit()
+        if loop == False:
+            exit()
         time.sleep(loop * 60)
-        iterate()
-    exit()
 
-
-
-autoYes = True if os.environ["autoYes"] == "True" else False
-loop = os.environ["loop"] if "loop" in os.environ.keys() and os.environ["loop"] != "False" else False
+autoYes = os.environ["autoYes"] == "True"
+loop = int(os.environ["loop"]) if "loop" in os.environ.keys() and os.environ["loop"] != "False" else False
 if "watch" in os.environ.keys():
     pathToWatch = os.environ["watch"]
 else:
