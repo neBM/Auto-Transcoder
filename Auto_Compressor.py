@@ -1,4 +1,4 @@
-import os, time, re, subprocess, getopt, sys, watchdog
+import os, time, re, subprocess
 from copy import deepcopy
 
 
