@@ -43,7 +43,7 @@ def initFFMPEG(inputFileDir):
     exportDir = os.path.abspath(relativePath)
 
 
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(720,ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
         print("Move old: " + os.path.abspath(relMvOldPath))
@@ -118,6 +118,7 @@ pathToExport = os.environ["export"]
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
 
+resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 
 print(os.environ["processed"])
 if "processed" in os.environ.keys() and os.environ["processed"] != "False":
