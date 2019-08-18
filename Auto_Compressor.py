@@ -1,4 +1,4 @@
-import os, time, re, subprocess
+import os, time, re, subprocess, sys
 from copy import deepcopy
 
 
@@ -42,6 +42,7 @@ def initFFMPEG(inputFileDir):
     relativePath = pathToExport + relativeDir + "/" + root + ".mkv"
     exportDir = os.path.abspath(relativePath)
 
+    inputFileInfo = bytes(subprocess.check_output(["ffmpeg/ffprobe", "-of", "csv", "-v", "error", "-show_streams", inputFileAbsDir])).decode(sys.stdout.encoding)
 
     args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
     if pathToMvOld != False:
