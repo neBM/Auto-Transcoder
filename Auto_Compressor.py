@@ -73,7 +73,7 @@ def initFFMPEG(inputFileDir):
 
     needsCompression = False
     for stream in videoStreams:
-        if stream[2] != "hevc":
+        if stream[2] != "hevc" or stream[10] > resCap:
             needsCompression = True
             break
 
