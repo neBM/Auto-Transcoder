@@ -79,12 +79,7 @@ def initFFMPEG(inputFileDir):
             needsCompression = True
             break
 
-    if needsCompression == False:
-        relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
-        if not os.path.exists(os.path.dirname(relativePath)):
-            os.makedirs(os.path.dirname(relativePath))
-        os.link(inputFileDir, relativePath)
-    else:
+    if needsCompression == True:
         subprocess.Popen(args).wait()
 
     if pathToMvOld != False:
@@ -92,8 +87,12 @@ def initFFMPEG(inputFileDir):
             os.makedirs(os.path.dirname(relMvOldPath))
         os.rename(inputFileDir, relMvOldPath)
 
-
-    if pathToTmp != False and needsCompression == True:
+    if needsCompression == False:
+        relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
+        if not os.path.exists(os.path.dirname(relativePath)):
+            os.makedirs(os.path.dirname(relativePath))
+        os.link(inputFileDir, relativePath)
+    elif pathToTmp != False:
         if not os.path.exists(os.path.dirname(exportDir)):
             os.makedirs(os.path.dirname(exportDir))
         os.rename(tmpAbsDir, exportDir)
