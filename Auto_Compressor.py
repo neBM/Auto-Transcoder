@@ -79,6 +79,8 @@ def initFFMPEG(inputFileDir):
 
     if needsCompression == False:
         relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
+        if not os.path.exists(os.path.dirname(relativePath)):
+            os.makedirs(os.path.dirname(relativePath))
         os.link(inputFileDir, relativePath)
     else:
         subprocess.Popen(args).wait()
