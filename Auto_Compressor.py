@@ -105,14 +105,10 @@ def initFFMPEG(inputFileDir):
 
     return True
 
-def addProcessed(relInputPath, relOutputPath, relMvOldPath):
-    if pathToMvOld != False and os.path.commonpath([pathToMvOld, pathToWatch]) == os.path.relpath(pathToWatch):
+def addProcessed(relInputPath, relOutputPath, relMvOldPath=None):
+    if relMvOldPath != None and pathToMvOld != False and os.path.commonpath([pathToMvOld, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Move old files path is a child of the watch folder. Adding moved file to processed to prevent loops.")
         addToProcessedFile(relMvOldPath)
-    addProcessed(relInputPath, relOutputPath)
-    return True
-
-def addProcessed(relInputPath, relOutputPath):
     if os.path.commonpath([pathToExport, pathToWatch]) == os.path.relpath(pathToWatch):
         print("Export path is a child of the watch folder. Adding processed file to processed to prevent loops.")
         addToProcessedFile(relOutputPath)
