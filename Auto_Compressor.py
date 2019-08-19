@@ -44,6 +44,20 @@ def initFFMPEG(inputFileDir):
 
     inputFileInfo = bytes(subprocess.check_output(["ffmpeg/ffprobe", "-of", "csv", "-v", "error", "-show_streams", inputFileAbsDir])).decode(sys.stdout.encoding)
 
+    streams = [stream.split(",") for stream in inputFileInfo.split("\n")]
+    streams.remove([""])
+
+    videoStreams = []
+    audioStreams = []
+    otherStreams = []
+    for stream in streams:
+        if stream[5] == "video":
+            videoStreams.append(stream)
+        elif stream[5] == "audio":
+            audioStreams.append(stream)
+        else:
+            otherStreams.append(stream)
+
     args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
