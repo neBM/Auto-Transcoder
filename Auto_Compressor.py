@@ -36,11 +36,24 @@ def initFFMPEG(inputFileDir):
 
     # Generate Output Path
     relativeDir = os.path.dirname(inputFileDir)[len(pathToWatch):]
-    root = os.path.splitext(os.path.basename(inputFileDir))[0]
+    pathName = os.path.splitext(os.path.basename(inputFileDir))
     if pathToTmp != False:
         tmpAbsDir = os.path.abspath(pathToTmp + "/" + hex(int(time.time())).split("x")[1] + ".mkv")
-    relativePath = pathToExport + relativeDir + "/" + root + ".mkv"
+    relativePath = pathToExport + relativeDir + "/" + pathName[0] + ".mkv"
     exportDir = os.path.abspath(relativePath)
+
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
+    if pathToMvOld != False:
+        relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
+        print("Move old: " + os.path.abspath(relMvOldPath))
+
+    print("Input: " + inputFileAbsDir)
+    print("Output: " + exportDir)
+    if autoYes != True and input("Start? (y/n) ") != "y":
+        return False
+
+    if not os.path.exists(os.path.dirname(pathToExport + relativeDir)):
+        os.makedirs(os.path.dirname(pathToExport + relativeDir))
 
     inputFileInfo = bytes(subprocess.check_output(["ffmpeg/ffprobe", "-of", "csv", "-v", "error", "-show_streams", inputFileAbsDir])).decode(sys.stdout.encoding)
 
@@ -58,25 +71,21 @@ def initFFMPEG(inputFileDir):
         else:
             otherStreams.append(stream)
 
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
-    if pathToMvOld != False:
-        relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
-        print("Move old: " + os.path.abspath(relMvOldPath))
+    needsCompression = False
+    for stream in videoStreams:
+        if stream[2] != "hevc":
+            needsCompression = True
+            break
 
-    print("Input: " + inputFileAbsDir)
-    print("Output: " + exportDir)
-    if autoYes != True and input("Start? (y/n) ") != "y":
-        return False
-
-    if not os.path.exists(os.path.dirname(pathToExport + relativeDir)):
-        os.makedirs(os.path.dirname(pathToExport + relativeDir))
-
-    subprocess.Popen(args).wait()
-
-    if pathToTmp != False:
-        if not os.path.exists(os.path.dirname(exportDir)):
-            os.makedirs(os.path.dirname(exportDir))
-        os.rename(tmpAbsDir, exportDir)
+    if needsCompression == False:
+        relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
+        os.link(inputFileDir, relativePath)
+    else:
+        subprocess.Popen(args).wait()
+        if pathToTmp != False:
+            if not os.path.exists(os.path.dirname(exportDir)):
+                os.makedirs(os.path.dirname(exportDir))
+            os.rename(tmpAbsDir, exportDir)
 
     if pathToMvOld != False:
         if not os.path.exists(os.path.dirname(relMvOldPath)):
