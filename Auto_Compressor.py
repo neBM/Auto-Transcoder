@@ -38,6 +38,8 @@ def initFFMPEG(inputFileDir):
     relativeDir = os.path.dirname(inputFileDir)[len(pathToWatch):]
     pathName = os.path.splitext(os.path.basename(inputFileDir))
     if pathToTmp != False:
+        if not os.path.exists(pathToTmp):
+            os.makedirs(pathToTmp)
         tmpAbsDir = os.path.abspath(pathToTmp + "/" + hex(int(time.time())).split("x")[1] + ".mkv")
     relativePath = pathToExport + relativeDir + "/" + pathName[0] + ".mkv"
     exportDir = os.path.abspath(relativePath)
@@ -84,15 +86,19 @@ def initFFMPEG(inputFileDir):
         os.link(inputFileDir, relativePath)
     else:
         subprocess.Popen(args).wait()
-        if pathToTmp != False:
-            if not os.path.exists(os.path.dirname(exportDir)):
-                os.makedirs(os.path.dirname(exportDir))
-            os.rename(tmpAbsDir, exportDir)
 
     if pathToMvOld != False:
         if not os.path.exists(os.path.dirname(relMvOldPath)):
             os.makedirs(os.path.dirname(relMvOldPath))
         os.rename(inputFileDir, relMvOldPath)
+
+
+    if pathToTmp != False and needsCompression == True:
+        if not os.path.exists(os.path.dirname(exportDir)):
+            os.makedirs(os.path.dirname(exportDir))
+        os.rename(tmpAbsDir, exportDir)
+
+    if pathToMvOld != False:
         addProcessed(inputFileDir, relativePath, relMvOldPath)
     else:
         addProcessed(inputFileDir, relativePath)
