@@ -1,4 +1,4 @@
-import os, time, re, subprocess
+import os, time, re, subprocess, sys
 from copy import deepcopy
 
 
@@ -36,14 +36,13 @@ def initFFMPEG(inputFileDir):
 
     # Generate Output Path
     relativeDir = os.path.dirname(inputFileDir)[len(pathToWatch):]
-    root = os.path.splitext(os.path.basename(inputFileDir))[0]
+    pathName = os.path.splitext(os.path.basename(inputFileDir))
     if pathToTmp != False:
         tmpAbsDir = os.path.abspath(pathToTmp + "/" + hex(int(time.time())).split("x")[1] + ".mkv")
-    relativePath = pathToExport + relativeDir + "/" + root + ".mkv"
+    relativePath = pathToExport + relativeDir + "/" + pathName[0] + ".mkv"
     exportDir = os.path.abspath(relativePath)
 
-
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
         print("Move old: " + os.path.abspath(relMvOldPath))
@@ -56,12 +55,39 @@ def initFFMPEG(inputFileDir):
     if not os.path.exists(os.path.dirname(pathToExport + relativeDir)):
         os.makedirs(os.path.dirname(pathToExport + relativeDir))
 
-    subprocess.Popen(args).wait()
+    inputFileInfo = bytes(subprocess.check_output(["ffmpeg/ffprobe", "-of", "csv", "-v", "error", "-show_streams", inputFileAbsDir])).decode(sys.stdout.encoding)
 
-    if pathToTmp != False:
-        if not os.path.exists(os.path.dirname(exportDir)):
-            os.makedirs(os.path.dirname(exportDir))
-        os.rename(tmpAbsDir, exportDir)
+    streams = [stream.split(",") for stream in inputFileInfo.split("\n")]
+    streams.remove([""])
+
+    videoStreams = []
+    audioStreams = []
+    otherStreams = []
+    for stream in streams:
+        if stream[5] == "video":
+            videoStreams.append(stream)
+        elif stream[5] == "audio":
+            audioStreams.append(stream)
+        else:
+            otherStreams.append(stream)
+
+    needsCompression = False
+    for stream in videoStreams:
+        if stream[2] != "hevc":
+            needsCompression = True
+            break
+
+    if needsCompression == False:
+        relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
+        if not os.path.exists(os.path.dirname(relativePath)):
+            os.makedirs(os.path.dirname(relativePath))
+        os.link(inputFileDir, relativePath)
+    else:
+        subprocess.Popen(args).wait()
+        if pathToTmp != False:
+            if not os.path.exists(os.path.dirname(exportDir)):
+                os.makedirs(os.path.dirname(exportDir))
+            os.rename(tmpAbsDir, exportDir)
 
     if pathToMvOld != False:
         if not os.path.exists(os.path.dirname(relMvOldPath)):
@@ -99,7 +125,7 @@ def addToProcessedFile(fileDir):
 
 def iterate():
     while True:
-        media = getMediaList(re.compile(r"\bmp4\b$"), before)
+        media = getMediaList(re.compile(r"(.webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.flv|.f4v|.f4p|.f4a|.f4b)$", flags=re.IGNORECASE), before)
         for x in media:
             if not initFFMPEG(x): exit()
         if loop == False:
@@ -118,6 +144,7 @@ pathToExport = os.environ["export"]
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
 
+resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 
 print(os.environ["processed"])
 if "processed" in os.environ.keys() and os.environ["processed"] != "False":
