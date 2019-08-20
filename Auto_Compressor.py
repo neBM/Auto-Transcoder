@@ -66,6 +66,8 @@ def initFFMPEG(inputFileDir):
     audioStreams = []
     otherStreams = []
     for stream in streams:
+        if stream[0] != "stream":
+            continue
         if stream[5] == "video":
             videoStreams.append(stream)
         elif stream[5] == "audio":
