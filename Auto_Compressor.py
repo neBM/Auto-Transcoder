@@ -55,8 +55,8 @@ def initFFMPEG(inputFileDir):
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
         print("Move old: " + os.path.abspath(relMvOldPath))
 
-    print("Input: " + inputFileAbsDir)
-    print("Output: " + exportDir)
+    if level >= 3: print("Input: " + inputFileAbsDir)
+    if level >= 3: print("Output: " + exportDir)
     if autoYes != True and input("Start? (y/n) ") != "y":
         return False
 
@@ -96,7 +96,7 @@ def initFFMPEG(inputFileDir):
         os.rename(inputFileDir, relMvOldPath)
 
     if needsCompression == False:
-        print("Compression not needed for " + inputFileAbsDir)
+        if level >= 2: print("Compression not needed for " + inputFileAbsDir)
         relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
         if not os.path.exists(os.path.dirname(relativePath)):
             os.makedirs(os.path.dirname(relativePath))
@@ -115,13 +115,13 @@ def initFFMPEG(inputFileDir):
 
 def addProcessed(relInputPath, relOutputPath, relMvOldPath=None):
     if relMvOldPath != None and pathToMvOld != False and os.path.commonpath([pathToMvOld, pathToWatch]) == os.path.relpath(pathToWatch):
-        print("Move old files path is a child of the watch folder. Adding moved file to processed to prevent loops.")
+        if level >= 2: print("Move old files path is a child of the watch folder. Adding moved file to processed to prevent loops.")
         addToProcessedFile(relMvOldPath)
     if os.path.commonpath([pathToExport, pathToWatch]) == os.path.relpath(pathToWatch):
-        print("Export path is a child of the watch folder. Adding processed file to processed to prevent loops.")
+        if level >= 2: print("Export path is a child of the watch folder. Adding processed file to processed to prevent loops.")
         addToProcessedFile(relOutputPath)
     addToProcessedFile(relInputPath)
-    print("Processed " + relInputPath)
+    if level >= 3: print("Processed " + relInputPath)
     processedFile.close()
     return True
 
@@ -140,7 +140,7 @@ def iterate():
             try:
                 if not initFFMPEG(x): exit()
             except subprocess.CalledProcessError:
-                print("Transcoder Error! Failed to process: " + x)
+                if level >= 1: print("Transcoder Error! Failed to process: " + x)
                 os.remove(x)
         if loop == False:
             exit()
@@ -157,6 +157,17 @@ else:
 pathToExport = os.environ["export"]
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
+
+level = os.environ["level"] if "level" in os.environ.keys() else "warning"
+
+class levels:
+    disabled = 0
+    error = 1
+    warning = 2
+    info = 3
+    verbose = 4
+
+level = getattr(levels, level)
 
 resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 
