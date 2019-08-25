@@ -44,8 +44,18 @@ def initFFMPEG(inputFileDir):
     relativePath = pathToExport + relativeDir + "/" + pathName[0] + ".mkv"
     exportDir = os.path.abspath(relativePath)
 
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "320k", "-ac", "2", "-preset", "medium", "-loglevel", "level+warning", "-y"]
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "320k", "-ac", "2", "-preset", "medium", "-y"]
 
+    switcher = {
+        0: "quiet",
+        1: "error",
+        2: "warning",
+        3: "info",
+        4: "verbose"
+        }
+
+    args.extend(["-loglevel", "level+" + switcher[level]])
+     
     if resCap != False:
         args.extend(["-vf", "scale=-1:'min(" + resCap + ",ih)'"])
 
@@ -53,10 +63,10 @@ def initFFMPEG(inputFileDir):
 
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
-        print("Move old: " + os.path.abspath(relMvOldPath))
+        if level >= 4: print("Move old: " + os.path.abspath(relMvOldPath))
 
-    if level >= 3: print("Input: " + inputFileAbsDir)
-    if level >= 3: print("Output: " + exportDir)
+    if level >= 4: print("Input: " + inputFileAbsDir)
+    if level >= 4: print("Output: " + exportDir)
     if autoYes != True and input("Start? (y/n) ") != "y":
         return False
 
