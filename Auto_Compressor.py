@@ -44,7 +44,13 @@ def initFFMPEG(inputFileDir):
     relativePath = pathToExport + relativeDir + "/" + pathName[0] + ".mkv"
     exportDir = os.path.abspath(relativePath)
 
-    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "320k", "-preset", "medium", "-vf", "scale=-1:'min(" + resCap + ",ih)'", "-loglevel", "level+warning", "-y", exportDir if pathToTmp == False else tmpAbsDir]
+    args = ["ffmpeg/ffmpeg", "-i", inputFileAbsDir, "-c:v", "libx265", "-crf", "28", "-c:a", "aac", "-b:a", "320k", "-ac", "2", "-preset", "medium", "-loglevel", "level+warning", "-y"]
+
+    if resCap != False:
+        args.extend(["-vf", "scale=-1:'min(" + resCap + ",ih)'"])
+
+    args.append(exportDir if pathToTmp == False else tmpAbsDir)
+
     if pathToMvOld != False:
         relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
         print("Move old: " + os.path.abspath(relMvOldPath))
@@ -131,7 +137,11 @@ def iterate():
     while True:
         media = getMediaList(re.compile(r"(.webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.flv|.f4v|.f4p|.f4a|.f4b)$", flags=re.IGNORECASE), before)
         for x in media:
-            if not initFFMPEG(x): exit()
+            try:
+                if not initFFMPEG(x): exit()
+            except subprocess.CalledProcessError:
+                print("Transcoder Error!")
+                raise
         if loop == False:
             exit()
         time.sleep(loop * 60)
