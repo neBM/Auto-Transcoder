@@ -157,7 +157,7 @@ else:
 pathToExport = os.environ["export"]
 pathToMvOld = os.environ["mvold"] if "mvold" in os.environ.keys() and os.environ["mvold"] != "False" else False
 pathToTmp = os.environ["tmp"] if "tmp" in os.environ.keys() and os.environ["tmp"] != "False" else False
-
+resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 level = os.environ["level"] if "level" in os.environ.keys() else "warning"
 
 class levels:
@@ -168,8 +168,6 @@ class levels:
     verbose = 4
 
 level = getattr(levels, level)
-
-resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 
 if "processed" in os.environ.keys() and os.environ["processed"] != "False":
     pathToProcessed = os.environ["processed"] if "processed" in os.environ.keys() else "/config/processed.tsv"
