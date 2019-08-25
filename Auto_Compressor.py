@@ -171,7 +171,6 @@ level = getattr(levels, level)
 
 resCap = os.environ["rescap"] if "rescap" in os.environ.keys() and os.environ["rescap"] != "False" else False
 
-print(os.environ["processed"])
 if "processed" in os.environ.keys() and os.environ["processed"] != "False":
     pathToProcessed = os.environ["processed"] if "processed" in os.environ.keys() else "/config/processed.tsv"
     if not os.path.exists(os.path.dirname(pathToProcessed)):
