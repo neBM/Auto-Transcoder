@@ -140,8 +140,8 @@ def iterate():
             try:
                 if not initFFMPEG(x): exit()
             except subprocess.CalledProcessError:
-                print("Transcoder Error!")
-                raise
+                print("Transcoder Error! Failed to process: " + x)
+                os.remove(x)
         if loop == False:
             exit()
         time.sleep(loop * 60)
