@@ -10,6 +10,7 @@ processed="</data/processed/file/here>.tsv" | Directory in container where a TSV
 mvold="<False//data/watch/folder/here>" | Directory to move the files found in the watch folder after completion.<br>False to disable moving after completion (Default).
 tmp="<False//data/watch/folder/here>" | Intermedary directory to store transcoding files. Completed files will be moved from tmp to the export directory.
 rescap="<False/1-MAXINT>" | Sets the max output height in pixels. Keeps aspect ratio. If the height in pixels of the input media is lower than the max then the input medias height is used. False to disable cap.
+Level="<disabled/error/warning/info/verbose>" | Sets the log level. Defaults to warning.
 
 
 ## Examples
