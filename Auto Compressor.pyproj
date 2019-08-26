@@ -14,12 +14,16 @@
     <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
-    <Environment>autoYes=False
-tmp=False
-processed=False
-watch=
-export=
-mvold=False</Environment>
+    <Environment>loop=False
+tmp=V:\downloads\torrent\compressed_tmp
+processed=V:\downloads\scripts\Auto_Compressor_Config\dev.tsv
+watch=V:\downloads\torrent\completed
+export=V:\downloads\torrent\compressed_dev
+mvold=False
+autoYes=True
+rescap=144
+level=verbose
+runRules=False</Environment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
