@@ -62,7 +62,7 @@ def initFFMPEG(inputFileDir):
     args.append(exportDir if pathToTmp == False else tmpAbsDir)
 
     if pathToMvOld != False:
-        relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir) if pathToMvOld != False else False
+        relMvOldPath = pathToMvOld + relativeDir + "/" + os.path.basename(inputFileDir)
         if level >= 4: print("Move old: " + os.path.abspath(relMvOldPath))
 
     if level >= 4: print("Input: " + inputFileAbsDir)
