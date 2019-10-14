@@ -110,7 +110,7 @@ def initFFMPEG(inputFileDir):
         relativePath = pathToExport + relativeDir + "/" + pathName[0] + pathName[1]
         if not os.path.exists(os.path.dirname(relativePath)):
             os.makedirs(os.path.dirname(relativePath))
-        os.link(relativePath if pathToMvOld == False else relMvOldPath, inputFileDir)
+        os.link(inputFileDir, relativePath if pathToMvOld == False else relMvOldPath)
     elif pathToTmp != False:
         if not os.path.exists(os.path.dirname(exportDir)):
             os.makedirs(os.path.dirname(exportDir))
