@@ -1,10 +1,8 @@
-FROM python:3
-
+FROM ubuntu
 WORKDIR /usr/src/app
-
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+RUN apt update && apt install --no-install-recommends -y \
+python3 \
+ffmpeg \
+&& rm -rf /var/lib/apt/lists/*
 COPY . .
-
-CMD [ "python", "./Auto_Compressor.py" ]
+CMD [ "python3", "./main.py" ]

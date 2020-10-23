@@ -1,0 +1,139 @@
+/* https://colorhunt.co/palette/1649 */
+
+* {
+    box-sizing: border-box;
+}
+html, body {
+    margin: 0px;
+}
+body {
+    font-family: "Roboto", sans-serif;
+    color: #000000;
+    height: 100vh;
+    width: 100vw;
+    background-color: #c9d6df;
+}
+#body {
+    border-radius: 10px;
+    display: flex;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+#bodyWrapper {
+    padding: 20px;
+    height: 100%;
+    width: 100%;
+}
+#mainWrapper {
+    background-color: #f0f5f9;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.main {
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px;
+    background-color: #FFFFFF;
+}
+#sidebar {
+    font-size: 19px;
+    flex-basis: 300px;
+    background-color: #FFFFFF;
+    font-weight: 100;
+}
+#nav {
+    list-style: none;
+    margin: 0px;
+    padding: 0px;
+    text-decoration: none;
+}
+#nav li {
+    position: relative;
+}
+#nav a {
+    padding: 20px;
+    display: block;
+    color: inherit;
+    text-decoration: inherit;
+    transition: padding .2s;
+}
+#nav a:hover {
+    padding-left: 30px;
+}
+.cards {
+    list-style: none;
+    margin: 0px;
+    padding: 0px;
+    display: flex;
+    color: #FFFFFF;
+}
+.cards .item {
+    background: linear-gradient(45deg, #fbb72f, transparent);
+    background-color: #f5805a;
+    margin: 20px;
+    border-radius: 10px;
+    flex-grow: 1;
+    padding: 30px;
+}
+.name {
+    font-weight: 100;
+    margin: 10px;
+}
+.valueContainer {
+    float: right;
+    font-weight: 100;
+    font-size: 28px;
+}
+.icon {
+    margin: 0px 10px;
+    font-size: 50px;
+}
+.stat {
+    margin: 20px 0px;
+}
+.stat .label {
+    font-size: 18px;
+    font-weight: 100;
+    margin: 0px;
+    color: #c9d6df;
+}
+.stat .value {
+    font-size: 48px;
+    margin: 0px;
+}
+.mainList {
+    border-collapse: collapse;
+    width: 100%;
+}
+.mainList td {
+    border: solid #c9d6df;
+    border-width: 1px 0px;
+    padding: 10px;
+}
+.mainList tr:hover td {
+    background-color: #f0f5f9;
+}
+.mainList .value {
+    float: right;
+}
+.mainList .item {
+    position: relative;
+}
+.mainList .progress {
+    position: absolute;
+    top: 0px;
+    bottom: 0px;
+    left: 0px;
+    background-color: #8bc34a40;
+    transition: width 1s linear;
+    width: 0px;
+}
+.mainList .value[datadisplay=state][state=RUNNING]::after {
+    content: "RUNNING";
+    color: green;
+}
+.mainList .value[datadisplay=state][state=WAITING]::after {
+    content: "WAITING";
+    color: black;
+}

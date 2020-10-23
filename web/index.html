@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="styles/master.css">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap">
+        <link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="scripts/index.js"></script>
+        <title>Document</title>
+    </head>
+    <body>
+        <div id="bodyWrapper">
+            <div id="body">
+                <div id="sidebar">
+                    <ul id="nav">
+                        <li>
+                            <a class="item" href="index.html">Home</a>
+                        </li>
+                        <li>
+                            <a clas="item" href="settings.html">Directories</a>
+                        </li>
+                        <li>
+                            <a clas="item" href="workers.html">Workers</a>
+                        </li>
+                    </ul>
+                </div>
+                <div id="mainWrapper">
+                    <div class="split">
+                    </div>
+                    <ul class="cards">
+                        <li class="item">
+                            <div class="valueContainer" dataDisplay="processedFileCount">Loading</div>
+                            <div class="name">Processed Files</div>
+                            <div class="icon">
+                                <i class="fas fa-bars"></i>
+                            </div>
+                        </li>
+                        <li class="item">
+                            <div class="valueContainer" dataDisplay="transcodeQueueCount">Loading</div>
+                            <div class="name">Queued Files</div>
+                            <div class="icon">
+                                <i class="fas fa-stream"></i>
+                            </div>
+                        </li>
+                    </ul>
+                    <div class="main">
+                        <div>
+                            <p class="mainHeading">Dashboard</p>
+                            <div class="stat">
+                                <p class="value"><span dataDisplay="fileCount">Loading</span> files</p>
+                                <p class="label">Managed Files</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="main">
+                        <div>
+                            <p class="mainHeading">Workers</p>
+                            <table class="mainList" dataDisplay="workers">
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
