@@ -1,0 +1,11 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "${workspaceFolder:Auto-Transcoder}/sqlite.db",
+            "name": "Sqlite"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
+}
