@@ -1,0 +1,17 @@
+services:
+  Auto-Transcoder:
+    build: .
+    image: auto-transcoder
+    ports:
+      - "5252:5252"
+    container_name: Auto-Transcoder
+    environment: 
+      - TRANSCODE_WORKERS=1
+      - PROBE_WORKERS=1
+    volumes:
+      - /media/docker/downloads/media:/data
+      - config:/config
+    cap_add: 
+      - SYS_NICE
+volumes:
+  config: {}
