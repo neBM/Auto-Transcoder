@@ -1,392 +1,557 @@
-import http.server, urllib.parse, logging, threading, json, os, traceback, subprocess, tempfile, abc, sqlite3, shutil, re, email.utils, email.message, smtplib, time, http
-from enum import Enum
+import abc
+import enum
+import http.server
+import json
+import logging
+import math
+import os
+import re
+import shutil
+import socketserver
+import sqlite3
+import subprocess
+import tempfile
+import threading
+import time
+import traceback
+import urllib.parse
+import uuid
 
-def _conn():
-    return sqlite3.connect("./sqlite.dev.db")
+PORT = 5252
+files = {}
 
-class Consumer:
-    queue = []
-    c = threading.Condition()
+def _connect():
+    return sqlite3.connect("/config/sqlite.db")
 
-    class State(Enum):
-        WAITING = 0
-        RUNNING = 1
+class Worker (abc.ABC):
+    class File:
+        def __init__(self, fid, file_details):
+            self.fid = fid
+            self.file_details = file_details
 
-    def __init__(self):
-        self.latestJob = self.state = self.totalWu = None
+        @property
+        def v_encoder(self):
+            """
+            Get the video encoder
+            """
+            with _connect() as conn:
+                c = conn.cursor()
+                return c.execute("SELECT `Directories`.`vencoder` FROM `Files` LEFT JOIN `Directories` ON `Files`.`parentDir` = `Directories`.`path` WHERE `uuid` = ? LIMIT 1", (str(self.fid),)).fetchone()[0]
+                
+        @property
+        def a_encoder(self):
+            """
+            Get the audio encoder
+            """
+            with _connect() as conn:
+                c = conn.cursor()
+                return c.execute("SELECT `Directories`.`aencoder` FROM `Files` LEFT JOIN `Directories` ON `Files`.`parentDir` = `Directories`.`path` WHERE `uuid` = ? LIMIT 1", (str(self.fid),)).fetchone()[0]
 
-    @property
-    def wu(self):
-        return None
+        @property
+        def s_encoder(self):
+            """
+            Get the audio encoder
+            """
+            with _connect() as conn:
+                c = conn.cursor()
+                return c.execute("SELECT `Directories`.`sencoder` FROM `Files` LEFT JOIN `Directories` ON `Files`.`parentDir` = `Directories`.`path` WHERE `uuid` = ? LIMIT 1", (str(self.fid),)).fetchone()[0]
+
+        @property
+        def streams(self):
+            """
+            Get the streams
+            """
+            with _connect() as conn:
+                c = conn.cursor()
+                return json.loads(c.execute("SELECT `streams` FROM `Files` WHERE `uuid` = ? LIMIT 1", (str(self.fid),)).fetchone()[0])
+
+        @property
+        def format(self):
+            """
+            Get the audio encoder
+            """
+            with _connect() as conn:
+                c = conn.cursor()
+                return json.loads(c.execute("SELECT `format` FROM `Files` WHERE `uuid` = ? LIMIT 1", (str(self.fid),)).fetchone()[0])
+
+    class State (enum.Enum):
+        WAITING = enum.auto()
+        RUNNING = enum.auto()
+        FAILED = enum.auto()
+
+    def __init__(self, workder_id):
+        self.worker_id = workder_id
+        self.current_job = None
 
     @classmethod
-    def extend(cls, files):
-        cls.queue.extend(files)
-        with cls.c:
-            cls.c.notify(len(files))
-        logging.info("Added {!s} items to {}'s queue".format(len(files), cls))
+    def has_next(cls):
+        return len(cls.queue) > 1
 
     @classmethod
     def pop(cls):
-        try:
-            return cls.queue.pop(0)
-        except IndexError as e:
-            return None
-
-    @staticmethod
-    def doWork(path): ...
-
-    def run(self):
-        logging.info("{} started.".format(threading.currentThread().name))
-        while True:
-            self.state = self.State.WAITING
-            while True:
-                data = self.pop()
-                if data == None:
-                    with self.c:
-                        self.c.wait()
-                else:
-                    break
-            self.latestJob = data
-            self.state = self.State.RUNNING
-            logging.debug("{} started work on {}".format(threading.currentThread().name, data))
-            try:
-                self.doWork(data)
-                # time.sleep(20)
-            except Exception as e:
-                tb = traceback.format_exc()
-                logging.error("Failed: " + data)
-                msg = email.message.EmailMessage()
-                msg.set_content("Data: {}\n\n{}".format(data, tb))
-                msg["Subject"] = "An error has occured!"
-                msg["From"] = "services@martinilink.co.uk"
-                msg["Date"] = email.utils.formatdate()
-                with smtplib.SMTP_SSL("mail.martinilink.co.uk") as smtp:
-                    smtp.login("services@martinilink.co.uk", "1nfinate-Space")
-                    smtp.send_message(msg, to_addrs=["ben@martinilink.co.uk"])
-
-
-class TranscoderWorker(Consumer):
-    def doWork(self, job):
-        path = job
-        conn = _conn()
-        c = conn.cursor()
-
-        p = subprocess.Popen(["ffprobe", "-loglevel", "quiet", "-print_format", "json", "-show_format", path], stdout=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        data = json.loads(stdout)
-        self.totalWu = float(data["format"]["duration"]) * 1e+6
-        progressFile = os.path.join(os.getcwd(), "progressFiles", format(hash(path), "x") + ".progress")
-        c.execute("UPDATE `files` SET `progressFile` = ? WHERE `path` = ?", (progressFile, path))
-        conn.commit()
-        tmpPath = tempfile.mktemp(suffix=".mkv")
-        p = subprocess.Popen([
-            "ffmpeg",
-            "-progress", progressFile,
-            "-v", "quiet",
-            # "-t", "10",
-            "-i", path,
-            "-c:v", "libx265",
-            "-x265-params", "log-level=error",
-            "-c:a", "aac",
-            "-preset", "slow",
-            # "-preset", "veryfast",
-            "-y",
-            tmpPath
-        ])
-        returnCode = p.wait()
-        if returnCode != 0:
-            raise Exception("Non zero return code!")
-        ownerDir = c.execute("SELECT `dir`.`path` FROM `files`, `dirs` WHERE `dirs`.`id` = `files`.`id` AND `files`.`path` = ? LIMIT 1", (path,)).fetchone()[0]
-        preserveLocation = os.path.join(ownerDir, ".preserved", os.path.relpath(path, ownerDir))
-        os.makedirs(os.path.dirname(preserveLocation), exist_ok=True)
-        os.rename(path, preserveLocation)
-        shutil.move(tmpPath, os.path.splitext(path)[0] + ".mkv")
-        logging.info("Transcode completed: " + path)
-        c.execute("UPDATE `files` SET `state` = 'done' WHERE `path` = ?", (path,))
-        conn.commit()
-
-    @property
-    def wu(self):
-        if self.latestJob == None:
-            return None
-        conn = _conn()
-        c = conn.cursor()
-        url = c.execute("SELECT `progressFile` FROM `files` WHERE path = ? LIMIT 1", (self.latestJob,)).fetchone()[0]
-        if url == None:
-            return None
-        data = []
-        with open(url, "r") as f:
-            probe = {}
-            for line in f:
-                line = line.strip()
-                l = line.split("=")
-                probe[l[0]] = l[1]
-                if l[0] == "progress":
-                    data.append(probe)
-                    probe = {}
-
-        return int(data.pop()["out_time_us"])
-
-
-class FileQueryWorker(Consumer):
+        return cls.queue.pop(0)
 
     @classmethod
-    def doWork(cls, job):
-        path = job
-        p = subprocess.Popen(["ffprobe", "-loglevel", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "v:0", path], stdout=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        data = json.loads(stdout)
-        streams = cls.sortStreams(data["streams"])
-        needsTranscoding = streams["video"][0]["codec_name"] != "hevc"
-        if needsTranscoding:
-            TranscoderWorker.extend([job])
-        logging.debug("Probe finished: " + path)
-        conn = _conn()
-        c = conn.cursor()
-        c.execute("UPDATE `files` SET `state` = ? WHERE `path` = ?", ("queued" if needsTranscoding else "done", path))
-        conn.commit()
+    def add(cls, job):
+        cls.queue.append(job)
+        logging.debug("1 new job added to {}".format(cls.__name__))
+        with cls.c:
+            cls.c.notify(1)
+
+    @classmethod
+    def add_all(cls, jobs):
+        cls.queue.extend(jobs)
+        logging.debug("{} new jobs added to {}".format(len(jobs), cls.__name__))
+        with cls.c:
+            cls.c.notify(len(jobs))
+
+    def run(self):
+        try:
+            while True:
+                with self.c:
+                    while not self.has_next():
+                        self.state = self.State.WAITING
+                        logging.info("{} waiting for next job".format(threading.current_thread().name))
+                        self.c.wait()
+                self.state = self.State.RUNNING
+                next_job = self.pop()
+                try:
+                    self.doWork(next_job)
+                    with _connect() as conn:
+                        c = conn.cursor()
+                        c.execute("INSERT INTO `Events` (`fileId`, `level`, `message`) VALUES (?, ?, ?)", (str(next_job.fid), logging.INFO, "{} completed".format(threading.current_thread().name)))
+                        conn.commit()
+                except Exception:
+                    exc = traceback.format_exc()
+                    print(exc)
+                    with _connect() as conn:
+                        c = conn.cursor()
+                        c.execute("INSERT INTO `Events` (`fileId`, `level`, `message`) VALUES (?, ?, ?)", (str(next_job.fid), logging.ERROR, exc))
+        except Exception:
+            self.state = self.State.FAILED
+
+    @abc.abstractmethod
+    def doWork(self, file_id):
+        raise NotImplementedError()
+
+    def getParts(self, parts):
+        data = {}
+        if "status" in parts:
+            data["status"] = {"state": self.state.name, "type": type(self).__name__}
+        if "id" in parts:
+            data["id"] = str(self.worker_id)
+        if "fileDetails" in parts:
+            if self.current_job == None:
+                data["fileDetails"] = None
+            else:
+                data["fileDetails"] = self.current_job.file_details
+        if "contentDetails" in parts:
+            if self.current_job == None:
+                data["contentDetails"] = None
+            else:
+                data["contentDetails"] = {}
+                data["contentDetails"]["streams"] = self.current_job.streams
+                data["contentDetails"]["format"] = self.current_job.format
+        return data
+
+class ProbeWorker (Worker):
+    c = threading.Condition()
+    queue = list()
+    
+    @staticmethod
+    def getContentDetails(file_path):
+        command = [
+            "nice",
+            "-n", "10",
+            "ffprobe",
+            "-show_format",
+            "-show_streams",
+            "-loglevel", "error",
+            "-print_format", "json",
+            file_path
+        ]
+        probe_process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        stdout, stderr = probe_process.communicate()
+        reutrn_code = probe_process.wait()
+        if reutrn_code != 0:
+            raise RuntimeError("FFPROBE non-zero return code")
+
+        return json.loads(stdout.decode())
+
+    @classmethod
+    def is_atTarget(cls, f):
+        streams = {}
+        for stream in f.streams:
+            if "codec_type" not in stream.keys():
+                continue
+            if stream["codec_type"] in streams.keys():
+                streams[stream["codec_type"]].append(stream)
+            else:
+                streams[stream["codec_type"]] = [stream]
+        if len(streams["video"]) > 1:
+            raise NotImplementedError("Multiple video streams not supported")
+        if streams["video"][0]["codec_name"] != f.v_encoder:
+            return False
+        return True
+
+    def doWork(self, f):
+        self.current_job = f
+        current_file = self.current_job.file_details
+        content_details = self.getContentDetails(current_file["filePath"])
+        with _connect() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE `files` SET `streams` = ?, `format` = ? WHERE `uuid` = ?", (json.dumps(content_details["streams"]), json.dumps(content_details["format"]), str(f.fid)))
+            conn.commit()
+        if not self.is_atTarget(self.current_job):
+            TranscoderWorker.add(f)
+        self.current_job = None
+
+    def getParts(self, parts):
+        data = super().getParts(parts)
+        if "processingDetails" in parts:
+            data["processingDetails"] = None
+        return data
+
+class TranscoderWorker (Worker):
+    c = threading.Condition()
+    queue = list()
+
+    class ProgressServer (socketserver.TCPServer):
+
+        def __init__(self, server_address, request_handler_class, context, bind_and_activate=True):
+            self.context = context
+            super().__init__(server_address, request_handler_class, bind_and_activate)
+
+        def setProgress(self, step):
+            self.context.progress = step
+
+    class ProgressHandler (socketserver.StreamRequestHandler):
+        @classmethod
+        def run(cls, context):
+            with TranscoderWorker.ProgressServer(("127.0.0.1", 0), cls, context) as tcpd:
+                context.setPort(tcpd.server_address[1])
+                tcpd.serve_forever()
+
+        def handle(self):
+            print("{} wrote:".format(self.client_address[0]))
+            step = {}
+            while True:
+                line = self.rfile.readline().strip().decode().split("=")
+                step[line[0]] = line[1]
+                if line[0] == "progress":
+                    print(step)
+                    self.server.setProgress(step)
+                    if line[1] != "continue":
+                        break
+                    time.sleep(1)
+                    step = {}
+    
+    @classmethod
+    def stop(cls):
+        cls.empty()
+        for worker in workers:
+            if type(worker) == TranscoderWorker and worker.transcode_process != None:
+                worker.transcode_process.terminate()
+
+    @classmethod
+    def empty(cls):
+        cls.queue.clear()
+
+    def setPort(self, port):
+        self.port = port
+        with self.port_change_c:
+            self.port_change_c.notifyAll()
+
+    def __init__(self, worker_id):
+        self.progress = None
+        self.port = None
+        self.port_change_c = threading.Condition()
+        self.transcode_process = None
+        super().__init__(worker_id)
+
+    def doWork(self, f):
+        file_id = f.fid
+        self.current_job = f
+        current_file = self.current_job.file_details
+        parent_dir = current_file["parentDir"]
+        file_path = current_file["filePath"]
+        preseve_path = os.path.join(parent_dir, ".preserve", os.path.relpath(file_path, parent_dir))
+        with _connect() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE `Files` SET `preservePath` = ? WHERE `uuid` = ?", (preseve_path, str(file_id)))
+            conn.commit()
+        logging.info("{} started next job: {}".format(threading.current_thread().name, file_path))
+        logging.debug("Preserve: {}".format(preseve_path))
+
+        progress_handler = threading.Thread(target=self.ProgressHandler.run, args=(self,), name="{}.progress".format(threading.current_thread().name))
+        progress_handler.start()
+
+        while self.port == None:
+            with self.port_change_c:
+                self.port_change_c.wait()
+
+        command = [
+            "nice",
+            "-n", "10",
+            "ffmpeg",
+            "-i", file_path,
+            "-c:v", self.current_job.v_encoder,
+            "-c:a", self.current_job.a_encoder,
+            "-c:s", self.current_job.s_encoder,
+            "-filter:v", "scale=-1:'min(720,ih)'",
+            "-f", "matroska",
+            "-y",
+            "-loglevel", "error",
+            "-progress", "tcp://127.0.0.1:{}".format(self.port),
+            "-"
+        ]
+        self.progress = {}
+
+        logging.debug("Executing '{}'".format(" ".join(command)))
+        with tempfile.NamedTemporaryFile(suffix=".mkv", delete=False) as tmp_file:
+            self.transcode_process = subprocess.Popen(command, stdout=tmp_file)
+        return_code = self.transcode_process.wait()
+        if return_code != 0:
+            raise RuntimeError("FFMPEG non-zero return code")
+
+        self.progress = None
+
+        os.makedirs(os.path.dirname(preseve_path), exist_ok=True)
+        shutil.move(file_path, preseve_path)
+        shutil.move(tmp_file.name, os.path.splitext(file_path)[0] + ".mkv")
+
+        ProbeWorker.add(file_id)
+
+        self.current_job = None
+        self.port = None
+
+    def getParts(self, parts):
+        data = super().getParts(parts)
+        if "processingDetails" in parts:
+            data["processingDetails"] = self.progress
+        return data
+        
+
+class HttpHandler (http.server.SimpleHTTPRequestHandler):
+    @classmethod
+    def run(cls):
+        with http.server.ThreadingHTTPServer(("", PORT), cls) as httpd:
+            httpd.serve_forever()
 
     @staticmethod
-    def sortStreams(streams):
-        sortedStreams = {}
-        for stream in streams:
-            try:
-                sortedStreams[stream["codec_type"]].append(stream)
-            except KeyError as identifier:
-                sortedStreams[stream["codec_type"]] = [stream]
-        return sortedStreams
+    def get_qs(request):
+        if request.command == "GET":
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(request.path).query)
+        elif request.command == "POST":
+            content_length = int(request.headers.get("content-length"))
+            qs = urllib.parse.parse_qs(request.rfile.read(content_length).decode())
+        else:
+            raise ValueError("Command '{}' not supported".format(request.command))
+        return qs
 
-def _findMedia(path):
-    mediaFilter = re.compile("(.webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.flv|.f4v|.f4p|.f4a|.f4b)$", flags=re.IGNORECASE)
-    files = [
-        os.path.join(dirpath, filename)
-        for dirpath, dirnames, filenames in os.walk(path) if not os.path.relpath(dirpath, path).startswith(".preserved")
-        for filename in filenames if mediaFilter.match(os.path.splitext(filename)[1]) != None
-    ]
-    return files
+    def do_GET(self):
+        url = urllib.parse.urlparse(self.path)
+        if url.path.split("/")[1] == "web":
+            return super().do_GET()
+        elif url.path.split("/")[1] == "api":
+            self.handle_apiRequest()
 
-# TODO implement dir watch
+        elif url.path == "/":
+            self.send_response(http.HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", "/web/index.html")
+            self.end_headers()
+        else:
+            self.send_response(http.HTTPStatus.NOT_FOUND)
+            self.end_headers()
 
+    def do_POST(self):
+        url = urllib.parse.urlparse(self.path)
+        path = url.path.split("/")[1:]
+        if path[0] != "api":
+            raise ValueError()
+        self.handle_apiRequest()
 
-class HttpServerWorker:
+    def handle_apiRequest(self):
+        try:
+            response_code, headers, data = self.API.parse(self)(self)
+            self.send_response(response_code)
+            for header in headers:
+                self.send_header(header, headers[header])
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            self.send_response(http.HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.send_header("content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(traceback.format_exc().encode())
 
     class API:
-
         @classmethod
-        def parseRequest(cls, method, path):
-            if method == "GET":
-                try:
-                    return {
-                        "ping": cls.ping,
-                        "files/search": cls.Files.search,
-                        "workers/list": cls.Workers.list,
-                        "dirs/list": cls.Dirs.list
-                    }["/".join(path)]
-                except IndexError as e:
-                    Exception("Command not found!")
-            elif method == "POST":
-                try:
-                    return {
-                        "dirs/insert": cls.Dirs.insert
-                    }["/".join(path)]
-                except IndexError as e:
-                    Exception("Command not found!")
-            else:
-                Exception("Invalid method!")
-
-        class Dirs:
-            @staticmethod
-            def list(qs):
-                parts = ["`dirs`.`id`"]
-                for qs_part in qs["part"]:
-                    parts.extend({
-                        "path": ["`dirs`.`path`"],
-                        "id": ["`dirs`.`id`"],
-                        "filesCount": ["COUNT(`files`.`id`)"]
-                    }[qs_part])
-                fields = ", ".join(parts)
-                conn = _conn()
-                c = conn.cursor()
-                dirs = {
-                    dir[0]: {
-                        qs["part"][dirDataI]: dirData for dirDataI, dirData in enumerate(dir[1:])
-                    } for diri, dir in enumerate(c.execute("SELECT {} FROM `dirs`, `files` WHERE `files`.`dirId` = `dirs`.`id` GROUP BY `dirs`.`id`".format(fields)).fetchall())
-                }
-                return (http.HTTPStatus.OK, "application/json", {"status": "OK", "data": dirs})
-
-            @staticmethod
-            def insert(qs):
-                path = qs["path"][0]
-                files = _findMedia(path)
-
-                conn = _conn()
-                c = conn.cursor()
-                c.execute("INSERT INTO `dirs` (`path`) VALUES (?)", (path,))
-                dirId = c.execute("SELECT `id` FROM `dirs` WHERE `path` = ? LIMIT 1", (path,)).fetchone()[0]
-                c.executemany("INSERT INTO `files` (`path`, `dirId`) VALUES (?, ?) ON CONFLICT(`path`) DO NOTHING", [(f, dirId) for f in files])
-                conn.commit()
-
-                FileQueryWorker.extend(files)
-                # TODO: create a dir watch
-                logging.info("{} files found.".format(len(files)))
-                return (http.HTTPStatus.OK, "application/json", {"status": "OK"})
-
-        class Files:
-            @staticmethod
-            def get(qs):
-                parts = ["`id`"]
-                for qs_part in qs["part"]:
-                    parts.extend({
-                        "id": ["`id`"],
-                        "path": ["`path`"],
-                        "state": ["`state`"],
-                        "dirId": ["`dirId`"]
-                    }[qs_part])
-                fields = ", ".join(parts)
-                id = qs["id"][0]
-                conn = _conn()
-                c = conn.cursor()
-                files = {
-                    f[0]: {
-                        qs["part"][fdi]: f[fdi] for fdi, fd in enumerate(parts[1:])
-                    } for fi, f in enumerate(c.execute("SELECT {} FROM `files` WHERE `id` = ? LIMIT 1".format(fields), (id,)).fetchone())
-                }
-                return (http.HTTPStatus.OK, "application/json", files)
-
-            @staticmethod
-            def search(qs):
-                parts = ["`id`"]
-                for qs_part in qs["part"]:
-                    parts.extend({
-                        "id": ["`id`"],
-                        "path": ["`path`"],
-                        "state": ["`state`"]
-                    }[qs_part])
-                fields = ", ".join(parts)
-                filters = []
-                if list(qs.keys()).count("dirId") > 0:
-                    filters.append(["`dirId`", qs["dirId"][0]])
-                elif list(qs.keys()).count("state") > 0:
-                    filters.append(["`state`", qs["state"][0]])
-                else:
-                    Exception("Missing filter")
-
-                query = "SELECT {} FROM `files`".format(fields)
-                params = []
-                if len(filters) > 0:
-                    query += " WHERE"
-                    for filter in filters:
-                        query += " {} = ?".format(filter[0])
-                        params.append(filter[1])
-                conn = _conn()
-                c = conn.cursor()
-                files = {
-                    f[0]: {
-                        qs["part"][fdi]: fd for fdi, fd in enumerate(f[1:])
-                    } for fi, f in enumerate(c.execute(query, params).fetchall())
-                }
-                return (http.HTTPStatus.OK, "application/json", files)
-        class Workers:
-            @staticmethod
-            def list(qs):
-                workers = {format(id(worker), "x"): {"state": worker.state.name, "latestJob": worker.latestJob, "totalWu": worker.totalWu, "wu": worker.wu, "type": type(worker).__name__} for worker in list(transcoderWorkers.keys()) + list(fileQueryWorkers.keys())}
-                return (http.HTTPStatus.OK, "application/json", workers)
-
-
-        @staticmethod
-        def ping(qs):
-            return (http.HTTPStatus.OK, "application/json", {"status": "OK", "message": qs["message"][0]})
-
-    class HttpServer(http.server.SimpleHTTPRequestHandler):
-
-        def parseRequest(self, method):
-            urlComp = urllib.parse.urlparse(self.path)
-            if method == "GET":
-                qs = urllib.parse.parse_qs(urlComp.query)
-            elif method == "POST":
-                contentLength = int(self.headers["Content-Length"])
-                qs = urllib.parse.parse_qs(self.rfile.read(contentLength).decode())
-            path = urlComp.path.split("/")[1:]
-            l0 = path.pop(0)
-            if l0 == "api":
-                try:
-                    deligate = HttpServerWorker.API.parseRequest(method, path)
-                    returnCode, contentType, data = deligate(qs)
-                    if contentType == "application/json":
-                        data = json.dumps(data)
-                except Exception as e:
-                    returnCode = http.HTTPStatus.INTERNAL_SERVER_ERROR
-                    contentType = "application/json"
-                    data = json.dumps({"status": "error", "exception": traceback.format_exc()})
-                self.send_response(returnCode)
-                self.send_header("Content-Type", contentType)
-                self.end_headers()
-                self.wfile.write(data.encode())
-            elif l0 == "web":
-                super().do_GET()
-            else:
-                self.send_response(404)
-                self.end_headers()
-
-        def do_GET(self):
-            self.parseRequest("GET")
-        def do_POST(self):
-            self.parseRequest("POST")
-
-    def serve_forever(self):
-        threading.currentThread().setName("HttpServerWorker")
-
-        port = 6969
-        server = http.server.ThreadingHTTPServer
-        handler = self.HttpServer
-
-        with server(("", port), handler) as httpd:
+        def parse(cls, request):
+            url = urllib.parse.urlparse(request.path)
+            path = url.path.split("/")[1:]
+            print("{} Command: {}".format(request.command, path))
             try:
-                httpd.serve_forever()
-            except KeyboardInterrupt as e:
-                httpd.socket.close()
+                return {
+                    "POST": {
+                        "dir": {
+                            "add": cls.Dir.add
+                        },
+                        "worker": {
+                            "stop": cls.Worker.stop,
+                            "skip": cls.Worker.skip,
+                            "clear": cls.Worker.empty
+                        }
+                    },
+                    "GET": {
+                        "server": {
+                            "backup": cls.Server.backup,
+                            "codecs": cls.Server.codecs
+                        },
+                        "file": {
+                            "list": cls.File.list
+                        },
+                        "worker": {
+                            "list": cls.Worker.list
+                        }
+                    }
+                }[request.command][path[1]][path[2]]
+            except KeyError:
+                raise ValueError("Command not found")
+
+        class Server:
+            @classmethod
+            def backup(cls, request):
+                with open("/config/sqlite.db", "rb") as f:
+                    return (http.HTTPStatus.OK, {"Content-Disposition": "attachment", "Content-Type": "application/octet-stream"}, f.read())
+
+            @classmethod
+            def codecs(cls, request):
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "codecs": cls.get_codecs()}).encode())
+
+            @staticmethod
+            def get_codecs():
+                p = subprocess.Popen(["ffmpeg", "-codecs", "-loglevel", "quiet"], stdout=subprocess.PIPE)
+                return_code = p.wait()
+                if return_code != 0:
+                    raise RuntimeError("FFPROBE non-zero return code")
+                stcout, stderr = p.communicate()
+                codecs = []
+                for row in stcout.decode().split("-------\n")[1].split("\n"):
+                    if row.strip() == "":
+                        continue
+                    fields = re.split("\s+", row)
+                    codecs.append({"decoder": fields[1][0] == "D", "encoder": fields[1][1] == "E", "type": fields[1][2], "intra_frame-only": fields[1][3] == "I", "lossy": fields[1][4] == "L", "lossless": fields[1][5] == "S", "id": fields[2], "name": " ".join(fields[3:])})
+                return codecs
+
+
+        class Worker:
+            @classmethod
+            def list(cls, request):
+                part = HttpHandler.get_qs(request)["part"][0]
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "workers": [workers[x][0].getParts(part.split(",")) for x in workers]}).encode())
+
+            @classmethod
+            def stop(cls, request):
+                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                workers[uuid.UUID(worker_id)].stop()
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
+
+            @classmethod
+            def skip(cls, request):
+                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                workers[uuid.UUID(worker_id)].skip()
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
+
+            @classmethod
+            def empty(cls, request):
+                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                workers[uuid.UUID(worker_id)].empty()
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
+
+        class File:
+            @classmethod
+            def list(cls, request):
+                qs = HttpHandler.get_qs(request)
+                page = int(qs["page"][0])
+                per_page = int(qs["perPage"][0])
+                with _connect() as conn:
+                    c = conn.cursor()
+                    return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "pages": math.ceil(c.execute("SELECT COUNT(`uuid`) FROM `files`").fetchone()[0] / per_page), "files": [{"uuid": f[0], "parentDir":  f[1],"filePath":  f[2], "streams":  json.loads(f[3]), "format":  json.loads(f[4])} for f in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page))]}).encode())
+
+        class Dir:
+
+            @classmethod
+            def add(cls, request):
+                qs = HttpHandler.get_qs(request)
+                path = qs["path"][0]
+                new_files = []
+                with _connect() as conn:
+                    c = conn.cursor()
+                    c.execute("INSERT INTO `Directories` (`path`, `vencoder`, `aencoder`, `sencoder`) VALUES (?, ?, ?, ?)", (path, qs["vencoder"][0], qs["aencoder"][0], qs["sencoder"][0]))
+                    for dirpath, dirnames, filenames in os.walk(path, topdown=True):
+                        dirnames[:] = [d for d in dirnames if d[0] != "."]
+                        filenames = [f for f in filenames if f[0] != "."]
+                        # TODO fix
+                        for filename in filenames:
+                            if not cls.is_media_file(filename):
+                                continue
+                            f = Worker.File(uuid.uuid4(), {"parentDir": path, "filePath": os.path.join(dirpath, filename)})
+                            new_files.append(f)
+                            c.execute("INSERT INTO `Files` (`uuid`, `parentDir`, `filePath`) VALUES (?, ?, ?)", (str(f.fid), f.file_details["parentDir"], f.file_details["filePath"]))
+                    conn.commit()
+                for f in new_files:
+                    files[f.fid] = f
+                    ProbeWorker.add(f)
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "count": len(new_files)}).encode())
+
+            @staticmethod
+            def is_media_file(filename):
+                return re.search("(.webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.flv|.f4v|.f4p|.f4a|.f4b)$", filename, re.IGNORECASE) != None
+
+def load():
+    with _connect() as c:
+        for f in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams` FROM `Files`").fetchall():
+            try:
+                fid = uuid.UUID(f[0])
+                files[fid] = Worker.File(fid, {"parentDir": f[1], "filePath": f[2]})
+                try:
+                    if f[3] == None:
+                        ProbeWorker.add(files[fid])
+                    elif not ProbeWorker.is_atTarget(files[fid]):
+                        TranscoderWorker.add(files[fid])
+                except NotImplementedError as e:
+                    traceback.print_exc()
+            except Exception as e:
+                logging.error("Failed to import file '{}'".format(f[0]))
+                raise e
+
+workers = {}
+
+with _connect() as conn:
+    c = conn.cursor()
+    with open("setup.sql", "r") as f:
+        c.executescript(f.read())
+    conn.commit()
 
 if __name__ == "__main__":
+    load()
+
+    TRANSCODE_WORKERS = int(os.getenv("TRANSCODE_WORKERS", 1))
+    PROBE_WORKERS = int(os.getenv("PROBE_WORKERS", 1))
+
     logging.basicConfig(level=logging.DEBUG)
+    httpServerThread = threading.Thread(target=HttpHandler.run)
+    httpServerThread.start()
 
-    logging.info("Running setup")
-    conn = _conn()
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS `dirs` (
-        `id` INTEGER PRIMARY KEY AUTOINCREMENT,
-        `path` TEXT UNIQUE NOT NULL
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS `files` (
-        `id` INTEGER PRIMARY KEY AUTOINCREMENT,
-        `path` TEXT UNIQUE NOT NULL,
-        `dirId` TEXT NOT NULL,
-        `state` TEXT NULL DEFAULT "added",
-        `progressFile` NULL DEFAULT NULL,
-        `added` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(`dirId`) REFERENCES `dirs`(`id`)
-    )''')
-    conn.commit()
-    logging.info("Setup complete")
+    for i in range(TRANSCODE_WORKERS):
+        workerId = uuid.uuid4()
+        transcoderWorker = TranscoderWorker(workerId)
+        workers[workerId] = (transcoderWorker, threading.Thread(target=transcoderWorker.run, name="transcoderWorker{}".format(i)))
+        workers[workerId][1].start()
 
-
-    TranscoderWorker.extend([f[0] for f in c.execute("SELECT `path` FROM `files` WHERE `state` IS ? ORDER BY `added` ASC", ("queued",)).fetchall()])
-
-    FileQueryWorker.extend([f[0] for f in c.execute("SELECT `path` FROM `files` WHERE `state` IS ? ORDER BY `added` ASC", ("added",)).fetchall()])
-
-    httpServerWorker = threading.Thread(target=HttpServerWorker().serve_forever)
-    httpServerWorker.start()
-
-    fileQueryWorkers = {}
-    for i in range(2):
-        fileQueryWorker = FileQueryWorker()
-        fileQueryWorkers[fileQueryWorker] = threading.Thread(target=fileQueryWorker.run, name="FileQueryWorker" + str(i))
-    transcoderWorkers = {}
-    for i in range(1):
-        transcoderWorker = TranscoderWorker()
-        transcoderWorkers[transcoderWorker] = threading.Thread(target=transcoderWorker.run, name="TranscoderWorker" + str(i))
-
-    for x in fileQueryWorkers:
-        fileQueryWorkers[x].start()
-    for x in transcoderWorkers:
-        transcoderWorkers[x].start()
+    for i in range(PROBE_WORKERS):
+        workerId = uuid.uuid4()
+        probeWorker = ProbeWorker(workerId)
+        workers[workerId] = (probeWorker, threading.Thread(target=probeWorker.run, name="probeWorker{}".format(i)))
+        workers[workerId][1].start()

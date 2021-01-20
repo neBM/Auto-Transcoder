@@ -1,8 +1,7 @@
-FROM ubuntu
+FROM python:3
 WORKDIR /usr/src/app
-RUN apt update && apt install --no-install-recommends -y \
-python3 \
-ffmpeg \
-&& rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && apt update && apt install --no-install-recommends -y ffmpeg
 COPY . .
-CMD [ "python3", "./main.py" ]
+CMD ["python", "./main.py"]
+EXPOSE 5252
