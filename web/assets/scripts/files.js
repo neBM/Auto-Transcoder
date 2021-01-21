@@ -40,7 +40,8 @@ function refreshFilesTable(table) {
         "dataType": "JSON",
         "data": {
             "page": page,
-            "perPage": perPage
+            "perPage": perPage,
+            "parts": ["fileDetails", "contentDetails"].join(",")
         }
     }).done(function (data) {
         doPages(data["pages"])
@@ -71,13 +72,13 @@ function refreshFilesTable(table) {
                 td_cd = tr.children().eq(2)
             }
             
-            td_path.text(file.filePath.substr(file.parentDir.length))
-            td_parent.text(file.parentDir)
+            td_path.text(file.fileDetails.filePath.substr(file.fileDetails.parentDir.length))
+            td_parent.text(file.fileDetails.parentDir)
             td_cd.html(function () {
                 let streams_table = $("<table>")
                 streams_table.addClass("table-sm")
                 let stream_row
-                file.streams.forEach(stream => {
+                file.contentDetails.streams.forEach(stream => {
                     stream_row = $("<tr>")
                     let type_cell = $("<td>")
                     type_cell.text(stream.codec_type)

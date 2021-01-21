@@ -479,7 +479,7 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
         class File:
             @classmethod
             def list(cls, request):
-                qs = HttpHandler.get_qs(request, ["page", "perPage"])
+                qs = HttpHandler.get_qs(request, ["page", "perPage", "parts"])
                 if "page" in qs:
                     page = int(qs["page"][0])
                 else:
@@ -488,9 +488,24 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
                     per_page = int(qs["perPage"][0])
                 else:
                     per_page = 30
+
+                parts = qs["parts"][0].split(",")
+
                 with _connect() as conn:
                     c = conn.cursor()
-                    return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "pages": math.ceil(c.execute("SELECT COUNT(`uuid`) FROM `files`").fetchone()[0] / per_page), "files": [{"uuid": f[0], "parentDir":  f[1],"filePath":  f[2], "streams":  json.loads(f[3]), "format":  json.loads(f[4])} for f in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page))]}).encode())
+                    files = []
+                    for f_row in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page)):
+                        f = {"uuid": f_row[0]}
+                        for part in parts:
+                            if part == "fileDetails":
+                                f["fileDetails"] = {"parentDir": f_row[1], "filePath":  f_row[2]}
+                            elif part == "contentDetails":
+                                f["contentDetails"] = {"streams":  json.loads(f_row[3]), "format":  json.loads(f_row[4])}
+                            else:
+                                raise ValueError("Part '{}' not found".format(part))
+                        files.append(f)
+
+                return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "pages": math.ceil(c.execute("SELECT COUNT(`uuid`) FROM `files`").fetchone()[0] / per_page), "files": files}).encode())
 
         class Dir:
 
