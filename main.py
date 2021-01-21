@@ -480,8 +480,14 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
             @classmethod
             def list(cls, request):
                 qs = HttpHandler.get_qs(request, ["page", "perPage"])
-                page = int(qs["page"][0])
-                per_page = int(qs["perPage"][0])
+                if "page" in qs:
+                    page = int(qs["page"][0])
+                else:
+                    page = 0
+                if "perPage" in qs:
+                    per_page = int(qs["perPage"][0])
+                else:
+                    per_page = 30
                 with _connect() as conn:
                     c = conn.cursor()
                     return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "pages": math.ceil(c.execute("SELECT COUNT(`uuid`) FROM `files`").fetchone()[0] / per_page), "files": [{"uuid": f[0], "parentDir":  f[1],"filePath":  f[2], "streams":  json.loads(f[3]), "format":  json.loads(f[4])} for f in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page))]}).encode())
