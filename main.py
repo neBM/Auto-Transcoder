@@ -338,8 +338,8 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
         with http.server.ThreadingHTTPServer(("", PORT), cls) as httpd:
             httpd.serve_forever()
 
-    @staticmethod
-    def get_qs(request):
+    @classmethod
+    def get_qs(cls, request, options):
         if request.command == "GET":
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(request.path).query)
         elif request.command == "POST":
@@ -347,6 +347,13 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
             qs = urllib.parse.parse_qs(request.rfile.read(content_length).decode())
         else:
             raise ValueError("Command '{}' not supported".format(request.command))
+        return cls.parse_qs(qs, options)
+
+    @classmethod
+    def parse_qs(cls, qs, options):
+        for q in qs:
+            if not q in options:
+                raise ValueError("Unrecognised option '{}'".format(q))
         return qs
 
     def do_GET(self):
@@ -448,31 +455,31 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
         class Worker:
             @classmethod
             def list(cls, request):
-                part = HttpHandler.get_qs(request)["part"][0]
+                part = HttpHandler.get_qs(request, ["part"])["part"][0]
                 return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "workers": [workers[x][0].getParts(part.split(",")) for x in workers]}).encode())
 
             @classmethod
             def stop(cls, request):
-                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                worker_id = HttpHandler.get_qs(request, ["workerId"])["workerId"][0]
                 workers[uuid.UUID(worker_id)].stop()
                 return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
 
             @classmethod
             def skip(cls, request):
-                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                worker_id = HttpHandler.get_qs(request, ["workerId"])["workerId"][0]
                 workers[uuid.UUID(worker_id)].skip()
                 return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
 
             @classmethod
             def empty(cls, request):
-                worker_id = HttpHandler.get_qs(request)["workerId"][0]
+                worker_id = HttpHandler.get_qs(request, ["workerId"])["workerId"][0]
                 workers[uuid.UUID(worker_id)].empty()
                 return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK"}))
 
         class File:
             @classmethod
             def list(cls, request):
-                qs = HttpHandler.get_qs(request)
+                qs = HttpHandler.get_qs(request, ["page", "perPage"])
                 page = int(qs["page"][0])
                 per_page = int(qs["perPage"][0])
                 with _connect() as conn:
@@ -483,7 +490,7 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
 
             @classmethod
             def add(cls, request):
-                qs = HttpHandler.get_qs(request)
+                qs = HttpHandler.get_qs(request, ["path", "vencoder", "aencoder", "sencoder"])
                 path = qs["path"][0]
                 new_files = []
                 with _connect() as conn:
