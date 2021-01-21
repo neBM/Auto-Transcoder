@@ -501,6 +501,8 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
                                 f["fileDetails"] = {"parentDir": f_row[1], "filePath":  f_row[2]}
                             elif part == "contentDetails":
                                 f["contentDetails"] = {"streams":  json.loads(f_row[3]), "format":  json.loads(f_row[4])}
+                            elif part == "events":
+                                f["events"] = [{"id": event[0], "timestamp": event[1], "level": event[2], "message": event[3]} for event in c.execute("SELECT `id`, `timestamp`, `level`, `message` FROM `Events` WHERE `fileId` = ?", f_row[0]).fetchall()]
                             else:
                                 raise ValueError("Part '{}' not found".format(part))
                         files.append(f)
