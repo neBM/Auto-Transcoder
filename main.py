@@ -479,15 +479,21 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
         class File:
             @classmethod
             def list(cls, request):
-                qs = HttpHandler.get_qs(request, ["page", "perPage", "parts"])
-                if "page" in qs:
-                    page = int(qs["page"][0])
-                else:
+                qs = HttpHandler.get_qs(request, ["page", "perPage", "parts", "fileId"])
+                if "fileId" in qs:
+                    command = ("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` WHERE `uuid` = ? LIMIT 1", (qs["fileId"][0],))
                     page = 0
-                if "perPage" in qs:
-                    per_page = int(qs["perPage"][0])
+                    per_page = 1
                 else:
-                    per_page = 30
+                    if "page" in qs:
+                        page = int(qs["page"][0])
+                    else:
+                        page = 0
+                    if "perPage" in qs:
+                        per_page = int(qs["perPage"][0])
+                    else:
+                        per_page = 30
+                    command = ("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page))
 
                 parts = qs["parts"][0].split(",")
                 available_parts = ["fileDetails", "contentDetails", "events"]
@@ -497,12 +503,12 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
                 with _connect() as conn:
                     c = conn.cursor()
                     files = []
-                    for f_row in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page)):
+                    for f_row in c.execute(command[0], command[1]):
                         f = {"uuid": f_row[0]}
                         if "fileDetails" in parts:
-                                f["fileDetails"] = {"parentDir": f_row[1], "filePath":  f_row[2]}
+                            f["fileDetails"] = {"parentDir": f_row[1], "filePath":  f_row[2]}
                         if "contentDetails" in parts:
-                                f["contentDetails"] = {"streams":  json.loads(f_row[3]), "format":  json.loads(f_row[4])}
+                            f["contentDetails"] = {"streams":  json.loads(f_row[3]), "format":  json.loads(f_row[4])}
                         if "events" in parts:
                             f["events"] = [{"id": event[0], "timestamp": event[1], "level": event[2], "message": event[3]} for event in c.execute("SELECT `id`, `timestamp`, `level`, `message` FROM `Events` WHERE `fileId` = ?", (f_row[0],)).fetchall()]
                         files.append(f)
