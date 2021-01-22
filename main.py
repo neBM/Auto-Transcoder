@@ -320,6 +320,11 @@ class TranscoderWorker (Worker):
         shutil.move(file_path, preseve_path)
         shutil.move(tmp_file.name, os.path.splitext(file_path)[0] + ".mkv")
 
+        with _connect() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE `Files` SET `filePath` = ?, WHERE `uuid` = ?", (os.path.splitext(file_path)[0] + ".mkv", str(file_id)))
+            conn.commit()
+
         ProbeWorker.add(file_id)
 
         self.current_job = None
