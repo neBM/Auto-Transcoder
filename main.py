@@ -490,21 +490,21 @@ class HttpHandler (http.server.SimpleHTTPRequestHandler):
                     per_page = 30
 
                 parts = qs["parts"][0].split(",")
+                available_parts = ["fileDetails", "contentDetails", "events"]
+                if not set(parts).issubset(available_parts):
+                    raise ValueError("Part(s) '{}' not found".format(",".join(set(parts).difference(available_parts))))
 
                 with _connect() as conn:
                     c = conn.cursor()
                     files = []
                     for f_row in c.execute("SELECT `uuid`, `parentDir`, `filePath`, `streams`, `format` FROM `Files` LIMIT ?, ?", (page * per_page, per_page)):
                         f = {"uuid": f_row[0]}
-                        for part in parts:
-                            if part == "fileDetails":
+                        if "fileDetails" in parts:
                                 f["fileDetails"] = {"parentDir": f_row[1], "filePath":  f_row[2]}
-                            elif part == "contentDetails":
+                        if "contentDetails" in parts:
                                 f["contentDetails"] = {"streams":  json.loads(f_row[3]), "format":  json.loads(f_row[4])}
-                            elif part == "events":
-                                f["events"] = [{"id": event[0], "timestamp": event[1], "level": event[2], "message": event[3]} for event in c.execute("SELECT `id`, `timestamp`, `level`, `message` FROM `Events` WHERE `fileId` = ?", f_row[0]).fetchall()]
-                            else:
-                                raise ValueError("Part '{}' not found".format(part))
+                        if "events" in parts:
+                            f["events"] = [{"id": event[0], "timestamp": event[1], "level": event[2], "message": event[3]} for event in c.execute("SELECT `id`, `timestamp`, `level`, `message` FROM `Events` WHERE `fileId` = ?", (f_row[0],)).fetchall()]
                         files.append(f)
 
                 return (http.HTTPStatus.OK, {}, json.dumps({"status": "OK", "pages": math.ceil(c.execute("SELECT COUNT(`uuid`) FROM `files`").fetchone()[0] / per_page), "files": files}).encode())
